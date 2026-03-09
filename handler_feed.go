@@ -54,6 +54,7 @@ func handlerAddFeed(s *state, cmd command, user database.User) error {
 	return nil
 }
 
+// one omore asfdj al;
 func printFeedFollow(username, feedname string) {
 	fmt.Printf("* User:          %s\n", username)
 	fmt.Printf("* Feed:          %s\n", feedname)
