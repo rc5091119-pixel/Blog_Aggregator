@@ -1,18 +1,45 @@
-# Gator – RSS Feed Aggregator CLI
+# Gator
 
-Gator is a command-line RSS feed aggregator written in Go.
-It allows users to follow RSS feeds, scrape posts from them periodically, store them in a PostgreSQL database, and browse posts directly from the terminal.
+A fast, terminal-native RSS feed aggregator written in Go — follow feeds, scrape posts automatically, and browse content without leaving your terminal.
 
 ---
 
-# Requirements
+## What is Gator?
 
-To run this program you must have the following installed:
+Gator is a CLI tool that lets you manage RSS feeds from the command line. It runs a background scraper on a configurable interval, stores all posts in PostgreSQL, and lets you browse the latest content across all feeds you follow — no browser required.
 
-* Go (version 1.20 or newer)
-* PostgreSQL
+---
 
-You can verify installation with:
+## Features
+
+- **User management** — Register and switch between multiple users from the CLI
+- **Feed management** — Add, list, follow, and unfollow any RSS feed by URL
+- **Automated scraping** — Background aggregator polls feeds at a custom interval and stores new posts
+- **ETL pipeline** — Full fetch → parse → transform → store pipeline with duplicate prevention
+- **Normalized schema** — PostgreSQL with migrations, foreign keys, and no duplicate records
+- **Browse from terminal** — View recent posts with configurable limit directly in your shell
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Language | Go (Golang) |
+| Database | PostgreSQL |
+| Migrations | Goose |
+| Config | JSON (`~/.gatorconfig.json`) |
+| Data pipeline | Custom ETL (fetch → parse → store) |
+
+---
+
+## Requirements
+
+- **Go** 1.20 or newer
+- **PostgreSQL** 14 or newer
+- **Goose** (for running migrations)
+
+Verify your setup:
 
 ```bash
 go version
@@ -21,57 +48,41 @@ psql --version
 
 ---
 
-# Installing the Gator CLI
+## Installation
 
-You can install the CLI using `go install`:
+Install the CLI directly with `go install`:
 
 ```bash
-go install github.com/YOUR_GITHUB_USERNAME/gator@latest
+go install github.com/rc5091119-pixel/gator@latest
 ```
 
-This will compile the program and install the `gator` binary on your system.
-
-Once installed, you should be able to run:
+This compiles and places the `gator` binary in your `$GOPATH/bin`. Once installed, run it from anywhere:
 
 ```bash
 gator
 ```
 
+> For development, use `go run .` inside the project directory instead.
+
 ---
 
-# Database Setup
+## Setup
 
-Create a PostgreSQL database:
+### 1. Create the database
 
 ```bash
 createdb gator
 ```
 
-Then set the database URL environment variable:
+### 2. Run migrations
 
 ```bash
-export DB_URL="postgres://username:password@localhost:5432/gator?sslmode=disable"
+goose postgres "postgres://username:password@localhost:5432/gator?sslmode=disable" up
 ```
 
-Run the database migrations:
+### 3. Create the config file
 
-```bash
-goose postgres $DB_URL up
-```
-
-This will create the required tables.
-
----
-
-# Config File Setup
-
-Create a config file at:
-
-```
-~/.gatorconfig.json
-```
-
-Example configuration:
+Create `~/.gatorconfig.json`:
 
 ```json
 {
@@ -80,110 +91,134 @@ Example configuration:
 }
 ```
 
-This file stores the database connection and the currently active user.
+This file stores your database connection string and tracks the currently active user across sessions.
 
 ---
 
-# Running the Program
+## Usage
 
-During development you can run:
-
-```bash
-go run .
-```
-
-However, this is **only for development**.
-
-For production usage you should run the compiled CLI:
+### User Commands
 
 ```bash
-gator
-```
-
-Go programs are statically compiled binaries. After running `go build` or `go install`, the program can run without the Go toolchain.
-
----
-
-# Example Commands
-
-### Register a User
-
-```bash
+# Register a new user (sets them as current user)
 gator register ravindra
+
+# Login as an existing user
+gator login ravindra
+
+# List all registered users
+gator users
 ```
 
-Creates a new user and sets them as the current user.
-
----
-
-### Add a Feed
+### Feed Commands
 
 ```bash
+# Add a new RSS feed
 gator addfeed "TechCrunch" https://techcrunch.com/feed/
-```
 
-Adds an RSS feed to the database.
-
----
-
-### View Feeds
-
-```bash
+# List all feeds in the database
 gator feeds
+
+# Follow a feed (by URL)
+gator follow https://techcrunch.com/feed/
+
+# Unfollow a feed
+gator unfollow https://techcrunch.com/feed/
+
+# List feeds you currently follow
+gator following
 ```
 
-Lists all available feeds.
-
----
-
-### Start the Feed Aggregator
+### Aggregator
 
 ```bash
+# Start scraping feeds every 10 seconds
 gator agg 10s
+
+# Scrape every 1 minute
+gator agg 1m
 ```
 
-This command scrapes feeds every 10 seconds and stores new posts in the database.
-
----
+The aggregator runs continuously in the foreground, fetching new posts and storing them. Use `Ctrl+C` to stop.
 
 ### Browse Posts
 
 ```bash
+# Show recent posts from followed feeds (default limit)
 gator browse
-```
 
-Shows the most recent posts from feeds you follow.
-
-You can specify how many posts to show:
-
-```bash
-gator browse 5
+# Show a specific number of posts
+gator browse 10
 ```
 
 ---
 
-# Example Feeds for Testing
+## Example Feeds to Get Started
 
-You can test the program with these RSS feeds:
-
-* https://techcrunch.com/feed/
-* https://news.ycombinator.com/rss
-* https://www.boot.dev/blog/index.xml
+```
+https://techcrunch.com/feed/
+https://news.ycombinator.com/rss
+https://www.boot.dev/blog/index.xml
+```
 
 ---
 
-# Repository
-
-After pushing your project to GitHub, your repo link should look like:
+## How the Aggregator Works
 
 ```
-https://github.com/YOUR_GITHUB_USERNAME/gator
+gator agg 10s
+      │
+      ▼
+Fetch next feed from DB (least recently fetched)
+      │
+      ▼
+HTTP GET → parse XML/RSS
+      │
+      ▼
+Transform items into post structs
+      │
+      ▼
+INSERT into posts (ON CONFLICT DO NOTHING — no duplicates)
+      │
+      ▼
+Wait interval → repeat
 ```
 
-Replace `YOUR_GITHUB_USERNAME` with your actual GitHub username.
+Each cycle picks the feed that was scraped longest ago, ensuring fair distribution across all followed feeds.
 
 ---
 
-# Author
+## Project Structure
 
-Ravindra Choudhary
+```
+gator/
+├── main.go                  # Entry point + command router
+├── config.go                # Config file read/write (~/.gatorconfig.json)
+├── commands.go              # CLI command definitions
+├── handler_user.go          # User register/login/list handlers
+├── handler_feed.go          # Add/list/follow/unfollow feed handlers
+├── handler_agg.go           # Aggregator loop + scraping logic
+├── handler_posts.go         # Browse posts handler
+├── internal/
+│   └── database/            # SQLC-generated DB layer
+├── sql/
+│   ├── queries/             # Raw SQL queries
+│   └── schema/              # Goose migration files
+├── go.mod
+├── go.sum
+└── README.md
+```
+
+---
+
+## Author
+
+**Ravindra Choudhary**
+B.Tech — Electronics and Communication Engineering, NIT Agartala | GPA: 8.73
+
+- 📧 rc5091119@gmail.com
+- 🐙 [github.com/rc5091119-pixel](https://github.com/rc5091119-pixel)
+
+---
+
+> Gator — because your RSS feeds deserve a proper home.
